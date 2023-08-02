@@ -1,152 +1,210 @@
 /*
  * Note-Started using template Jan 2016 for compiler V 1.6.7
  * @TODO-always remember to update version history and programed compiled with below
- * 
+ *
  * Circuit details below:
- * 
- * 
+ *
+ *
  */
 
 //*****library inclusions below
-//needed for platforIO, not needed if using arduino IDE
+// needed for platforIO, not needed if using arduino IDE
 #include <Arduino.h>
-//needed for radiohead library
+// needed for radiohead library
 #include <SPI.h>
-//radiohead library. Others availabe. This one works with Semtech SX1276/77/78/79, Modtronix inAir4 and inAir9, and HopeRF RFM95/96/97/98 and other similar LoRa capable radios. (http://www.airspayce.com/mikem/arduino/RadioHead/index.html?utm_source=platformio&utm_medium=piohome)
+// radiohead library. Others availabe. This one works with Semtech SX1276/77/78/79, Modtronix inAir4 and inAir9, and HopeRF RFM95/96/97/98 and other similar LoRa capable radios. (http://www.airspayce.com/mikem/arduino/RadioHead/index.html?utm_source=platformio&utm_medium=piohome)
 #include <RH_RF95.h>
 
-
 //*****global variables below
-//general global variables
-boolean serialON=true;//print messages to serial, not needed if running on own
-float firmwareV; //@TODO-change to float
-boolean debug = true; //enable verbose debug messages to serial
+// general global variables
+float firmwareV;      //@TODO-change to float
+boolean debug = false; // enable verbose debug messages to serial
+// pin to show recepit of message
+#define LEDPIN 9
 
-//for radio
-//multiple instances possible but each instance must have its own interrupt and slave select pin. @TODO-check these pins are correct for moteino,  
-#define RFM95_CS 10 //chip select for SPI
-#define RFM95_INT 2 //interupt pin
+// for radio
+// multiple instances possible but each instance must have its own interrupt and slave select pin. @TODO-check these pins are correct for moteino,
+#define RFM95_CS 10 // chip select for SPI
+#define RFM95_INT 2 // interupt pin
 RH_RF95 rf95(RFM95_CS, RFM95_INT);
-unsigned long nodeID = 3; //up to 2 million for lorawan?
+unsigned long nodeID = 100001; // up to 2 million for lorawan?
+//@TODO-move other parameters up here for easy setting
+float frequency = 904.0; // Specify the desired frequency in MHz
 
+//****************functions- if declared before used, don't need Function Prototypes (.h) file? @TODO-is this preferred format for C++?
 
-//******functions- if declared before used, don't need Function Prototypes (.h) file? @TODO-is this preferred format for C++?
-long readVcc() {
-  // Read 1.1V reference against AVcc
-  // set the reference to Vcc and the measurement to the internal 1.1V reference
-  //https://provideyourown.com/2012/secret-arduino-voltmeter-measure-battery-voltage/
-  #if defined(__AVR_ATmega32U4__) || defined(__AVR_ATmega1280__) || defined(__AVR_ATmega2560__)
-    ADMUX = _BV(REFS0) | _BV(MUX4) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
-  #elif defined (__AVR_ATtiny24__) || defined(__AVR_ATtiny44__) || defined(__AVR_ATtiny84__)
-    ADMUX = _BV(MUX5) | _BV(MUX0);
-  #elif defined (__AVR_ATtiny25__) || defined(__AVR_ATtiny45__) || defined(__AVR_ATtiny85__)
-    ADMUX = _BV(MUX3) | _BV(MUX2);
-  #else
-    ADMUX = _BV(REFS0) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
-  #endif  
-
-  delay(2); // Wait for Vref to settle
-  ADCSRA |= _BV(ADSC); // Start conversion
-  while (bit_is_set(ADCSRA,ADSC)); // measuring
-
-  uint8_t low  = ADCL; // must read ADCL first - it then locks ADCH  
-  uint8_t high = ADCH; // unlocks both
-
-  long result = (high<<8) | low;
-
-  result = 1125300L / result; // Calculate Vcc (in mV); 1125300 = 1.1*1023*1000
-  return result; // Vcc in millivolts
+void fcn()
+{
+  // this is a description of this function
+  // var1-defintion
 }
 
-void fcn(){
-  //this is a description of this function
-  //var1-defintion
-  
-}
-
-
-void setup(){
-  Serial.begin(9600);
-  Serial.println();
-  Serial.println();
-  Serial.println(F("Compiled with VScode and PlatformIO")); //@TODO-update this whenever compiling or get platformIO to do it automatically
-  Serial.println(F("and librarys:mikem/RadioHead@^1.120, SPI.h"));
-  Serial.println(F("RFM9595TEST-SEND V 1.0"));
-  Serial.println(F("This program sends dummy packets to test the transmission ability of the REM95 module."));
-  if(!serialON){
-    Serial.end();
-  }
+void setup()
+{
+  firmwareV = 1.2;
   /*
    * Version history:
    * V1.0-initial
-   * 
+   * V1.1-added ability to not send ACKs to other ACKs and print signal infromation
+   * V1.2-changed the way messages are sent to serial slightly
+   *
+   * @TODO:
+   * change from a boolean debug variable to a log level byte variable
+   * allow log level set from serial
+   * allow frequency set from serial
+   * allow set nodeID from serial
+   * store nodeID in EEPROM
+   * make it send firmware and nodeID in response to serial data
    */
-  firmwareV = 1.0;
+  Serial.begin(9600);
+  Serial.println();
+  Serial.println();
+  Serial.println(F("SETUP-Compiled with VScode and PlatformIO")); //@TODO-update this whenever compiling or get platformIO to do it automatically
+  Serial.println(F("SETUP-and librarys:mikem/RadioHead, SPI.h"));
+  Serial.print(F("SETUP-RFM95 receiver V"));
+  Serial.println(firmwareV);
+  Serial.println(F("SETUP-This program prints the lora messages received to the serial monitor."));
   
 
-//start RFM95 radio
-  if (!rf95.init()) {
-    if(serialON){
-    Serial.println("RFM95 initialization failed");
+  // set pin(s) to output mode and do a test
+  pinMode(LEDPIN, OUTPUT);
+  digitalWrite(LEDPIN, HIGH);
+  delay(500);
+  digitalWrite(LEDPIN, LOW);
+
+  /*
+    if(debug){
+      Serial.end();
+      delay(100);
+  pinMode(0, OUTPUT);
+  pinMode(1, OUTPUT);
+  delay(100);
+  digitalWrite(0,HIGH);
+  digitalWrite(1,HIGH);
+  digitalWrite(LEDPIN,HIGH);
+  delay(10000);
+  digitalWrite(0,LOW);
+  digitalWrite(1,LOW);
+  digitalWrite(LEDPIN,LOW);
+  delay(10000);
+    digitalWrite(LEDPIN,HIGH);
+  delay(500);
+  digitalWrite(LEDPIN,LOW);
+  Serial.begin(9600);
     }
-    while (1);
+  */
+
+  // start RFM95 radio
+  if (!rf95.init())
+  {
+    Serial.println("ERROR-RFM95 initialization failed, can't do anything else! Reset me to try again.");
+    digitalWrite(LEDPIN, HIGH);
+    while (1)
+      ;
   }
 
-//Set RFM95 transmission parameters
-//Note- some set functions do not return anything so don't need to check for sucess.
-  //These 5 paramenter settings results in max range. The allowed values also come from this source (source:M. Bor and U. Roedig, “LoRa Transmission Parameter Selection,” in 2017 13th International Conference on Distributed Computing in Sensor Systems (DCOSS), Jun. 2017, pp. 27–34. doi: 10.1109/DCOSS.2017.10.)
-  // Set transmit power to the maximum (20 dBm), @TODO-check 2nd value. false is if PA_BOOST pin is used and true is RFO pin is used on RFM95 module
-  rf95.setTxPower(20, false);//-4 to 20 in 1 dB steps
-  // Set spreading factor to the highest (SF12)
-  rf95.setSpreadingFactor(12);//6 to 12. A higher spreading factor increases the Signal to Noise Ratio (SNR), and thus sensitivity and range, but also increases the airtime of the packet. The number of chips per symbol is calculated as 2SF . For example, with an SF of 12 (SF12) 4096 chips/symbol are used. Each increase in SF halves the transmission rate and, hence, doubles transmission duration and ultimately energy consumption.
-  // Set bandwidth to the lowest (125 kHz)
-  rf95.setSignalBandwidth(125000); //7.8 to 500 kHz. typical 125,250 or 500 kHz. Higher BW gives a higher data rate (thus shorter time on air), but a lower sensitivity.  Lower BW also requires more accurate crystals (less ppm).
+  // Set RFM95 transmission parameters
+  // Note- some set functions do not return anything so don't need to check for sucess.
+  // These 5 paramenter settings results in max range. The allowed values also come from this source (source:M. Bor and U. Roedig, “LoRa Transmission Parameter Selection,” in 2017 13th International Conference on Distributed Computing in Sensor Systems (DCOSS), Jun. 2017, pp. 27–34. doi: 10.1109/DCOSS.2017.10.)
+  //  Set transmit power to the maximum (20 dBm), @TODO-check 2nd value. false is if PA_BOOST pin is used and true is RFO pin is used on RFM95 module
+  rf95.setTxPower(20, false); //-4 to 20 in 1 dB steps
   // Set coding rate to the highest (4/8)
-  rf95.setCodingRate4(8);//5 to 8. offers protection against bursts of interference, A higher CR offers more protection, but increases time on air.
-// Set the desired frequency @TODO-how to set for optimal range?
-  float frequency = 915.0; // Specify the desired frequency in MHz
-  if (!rf95.setFrequency(frequency)) {
-    Serial.println("Failed to set frequency!");
-    while (1);
+  rf95.setCodingRate4(8); // 5 to 8. offers protection against bursts of interference, A higher CR offers more protection, but increases time on air.
+  // Set spreading factor to the highest (SF12)
+  rf95.setSpreadingFactor(12); // 6 to 12. A higher spreading factor increases the Signal to Noise Ratio (SNR), and thus sensitivity and range, but also increases the airtime of the packet. The number of chips per symbol is calculated as 2SF . For example, with an SF of 12 (SF12) 4096 chips/symbol are used. Each increase in SF halves the transmission rate and, hence, doubles transmission duration and ultimately energy consumption.
+  // Set bandwidth to the lowest (125 kHz). July 2023- 62500 Hz works with 1/2 dipole but unreliably. 41700 Hz does not work (tried 1/4 monopole, helical and 1/2 dipole for tx and 1/2 dipole for rx)
+  rf95.setSignalBandwidth(125000); // 7.8 to 500 kHz. typical values are 125000 ,250000 or 500000 Hz. Higher BW gives a higher data rate (thus shorter time on air), but a lower sensitivity.  Lower BW also requires more accurate crystals (less ppm).
+  // Set the desired frequency @TODO-how to set for optimal range?
+  if (!rf95.setFrequency(frequency))
+  {
+    Serial.println("ERROR-Failed to set frequency!");
+    digitalWrite(LEDPIN, HIGH);
+    while (1)
+      ;
   }
 
-  if(serialON){
-  Serial.println(F("RFM95 initialized."));
-  if(debug){
-    Serial.println(F("All device registers:"));
+  Serial.println(F("INFO-RFM95 initialized."));
+  if (debug)
+  {
+    Serial.println(F("DEBUG-All device registers:"));
     rf95.printRegisters();
     Serial.println();
   }
-  Serial.print(F("Device version from register 42:"));
+  Serial.print(F("INFO-Device version from register 42: "));
   Serial.println(rf95.getDeviceVersion());
-  Serial.println(F("nodeID set to:"));
+  Serial.print(F("INFO-nodeID set to: "));
   Serial.println(nodeID);
   //@TODO-consider printing other things like maxMessageLength() (http://www.airspayce.com/mikem/arduino/RadioHead/classRH__RF95.html#ab273e242758e3cc2ed2679ef795a7196)
+
+} // end setup fcn
+
+void loop()
+{
+  static unsigned long loopCounter = 1;
+  // delay(2000);//wait for message to come in @TODO-needed?
+
+  if (rf95.available())
+  {
+    digitalWrite(LEDPIN, HIGH);
+
+    uint8_t buf[RH_RF95_MAX_MESSAGE_LEN];
+    uint8_t len = sizeof(buf);
+
+    if (rf95.recv(buf, &len)) // recv wants two pointers. You don't need to use &buf because C++ returns the address to the first element &len returns memory address of len
+    {
+      buf[len] = '\0'; // Null-terminate the received message to treat it as a string
+      Serial.print(F("Message,"));
+      Serial.println((char *)buf); // casts this as a chracter array?? @TODO-check
+
+      int16_t rssi = rf95.lastRssi();
+      int snr = rf95.lastSNR();
+      int freqError = rf95.frequencyError();
+
+      //Serial.println(F("INFO-RSSI,SNR,Frequency error,message length (bytes)"));
+      Serial.print(F("Signal,"));
+      Serial.print(rssi);
+      Serial.print(',');
+      Serial.print(snr);
+      Serial.print(',');
+      Serial.print(freqError);
+      Serial.print(',');
+      Serial.println(len);
+
+      // return ACK message, if needed
+      //@TODO-add support for requesting an ack message or not
+      static boolean ackReq = true;
+      const char *ackMessage = "ACK";// Acknowledgment message, careful changing this as firmware update of all nodes will be needed. All receive nodes set to not send ACKs to this specific message
+      boolean messageIsACK = strncmp((char *)buf, ackMessage, strlen(ackMessage)) == 0; // compaire the first characters of buffer to see if this is ACK message
+
+      if (ackReq && !messageIsACK) // if ack requested and this is not an ACK message itself
+      {
+        // Send an acknowledgment back to the sender
+        rf95.send((uint8_t *)ackMessage, strlen(ackMessage));
+        rf95.waitPacketSent();
+        Serial.println("INFO-Sent ACK message.");
+      }
+      else
+      {
+        Serial.println("INFO-not sending ACK message.");
+      }
+    }
+
+    digitalWrite(LEDPIN, LOW);
   }
-  
-}//end setup fcn
 
-void loop(){
-  static unsigned long counter = 1;
-
-  long supplyV = readVcc();
-  char message[47]; //@TODO-make this shorter to save memory. unsigned long:4,294,967,295. long: -2,147,483,648 (approximate assume all fields are 11 chars and one for comma: 11+1+11+1+11+1+11=47)
-  //@TODO-get this to dynamically update the firmware version number
-  snprintf(message, sizeof(message)/sizeof(char), "1.0,%lu,%ld,%lu",nodeID,supplyV,counter); //snprintf should add the \0 at the end
-
-  if(serialON){
-  Serial.println(F("Sending data:"));
-  Serial.println(message);
+  static unsigned long previousMillis = 0;
+  // Get the current time
+  unsigned long currentMillis = millis();
+  // if(debug && loopCounter % 1000000 == 0){
+  if (debug && (currentMillis - previousMillis >= 60000))
+  { // print a test message to serial, even if no transmission, 300000=5 min
+    digitalWrite(LEDPIN, HIGH);
+    // Reset the timer
+    previousMillis = currentMillis;
+    Serial.println(F("DEBUG-test serial message. Set to send at repeatable time interval."));
+    delay(100);
+    digitalWrite(LEDPIN, LOW);
   }
 
-  rf95.send((uint8_t*)message, strlen(message));
-  rf95.waitPacketSent();
-
-if(serialON){
-  Serial.println("Packet sent");
-  }
-
-  delay(100);
-  counter++;
- 
-}//end loop fcn
+  loopCounter++;
+} // end loop fcn
