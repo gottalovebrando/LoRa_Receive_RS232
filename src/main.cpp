@@ -17,7 +17,7 @@
 
 //*****global variables below
 // general global variables
-float firmwareV;      //@TODO-change to float
+float firmwareV;       //@TODO-change to float
 boolean debug = false; // enable verbose debug messages to serial
 // pin to show recepit of message
 #define LEDPIN 9
@@ -30,6 +30,9 @@ RH_RF95 rf95(RFM95_CS, RFM95_INT);
 unsigned long nodeID = 100001; // up to 2 million for lorawan?
 //@TODO-move other parameters up here for easy setting
 float frequency = 904.0; // Specify the desired frequency in MHz
+//@TODO-is this the right data type??
+uint8_t spreadingFactor = 12;  // 6 to 12. A higher spreading factor increases the Signal to Noise Ratio (SNR), and thus sensitivity and range, but also increases the airtime of the packet. The number of chips per symbol is calculated as 2SF . For example, with an SF of 12 (SF12) 4096 chips/symbol are used. Each increase in SF halves the transmission rate and, hence, doubles transmission duration and ultimately energy consumption.
+long signalBandwidth = 125000; // 7.8 to 500 kHz. typical values are 125000 ,250000 or 500000 Hz. Higher BW gives a higher data rate (thus shorter time on air), but a lower sensitivity.  Lower BW also requires more accurate crystals (less ppm).  Set bandwidth to the lowest (125 kHz). July 2023- 62500 Hz works with 1/2 dipole but unreliably. 41700 Hz does not work (tried 1/4 monopole, helical and 1/2 dipole for tx and 1/2 dipole for rx)
 
 //****************functions- if declared before used, don't need Function Prototypes (.h) file? @TODO-is this preferred format for C++?
 
@@ -41,12 +44,13 @@ void fcn()
 
 void setup()
 {
-  firmwareV = 1.2;
+  firmwareV = 1.3;
   /*
    * Version history:
    * V1.0-initial
    * V1.1-added ability to not send ACKs to other ACKs and print signal infromation
    * V1.2-changed the way messages are sent to serial slightly
+   * V1.3-changed message format
    *
    * @TODO:
    * change from a boolean debug variable to a log level byte variable
@@ -56,7 +60,7 @@ void setup()
    * store nodeID in EEPROM
    * make it send firmware and nodeID in response to serial data
    */
-  Serial.begin(9600);
+  Serial.begin(4800);
   Serial.println();
   Serial.println();
   Serial.println(F("SETUP-Compiled with VScode and PlatformIO")); //@TODO-update this whenever compiling or get platformIO to do it automatically
@@ -64,35 +68,12 @@ void setup()
   Serial.print(F("SETUP-RFM95 receiver V"));
   Serial.println(firmwareV);
   Serial.println(F("SETUP-This program prints the lora messages received to the serial monitor."));
-  
 
   // set pin(s) to output mode and do a test
   pinMode(LEDPIN, OUTPUT);
   digitalWrite(LEDPIN, HIGH);
   delay(500);
   digitalWrite(LEDPIN, LOW);
-
-  /*
-    if(debug){
-      Serial.end();
-      delay(100);
-  pinMode(0, OUTPUT);
-  pinMode(1, OUTPUT);
-  delay(100);
-  digitalWrite(0,HIGH);
-  digitalWrite(1,HIGH);
-  digitalWrite(LEDPIN,HIGH);
-  delay(10000);
-  digitalWrite(0,LOW);
-  digitalWrite(1,LOW);
-  digitalWrite(LEDPIN,LOW);
-  delay(10000);
-    digitalWrite(LEDPIN,HIGH);
-  delay(500);
-  digitalWrite(LEDPIN,LOW);
-  Serial.begin(9600);
-    }
-  */
 
   // start RFM95 radio
   if (!rf95.init())
@@ -111,9 +92,9 @@ void setup()
   // Set coding rate to the highest (4/8)
   rf95.setCodingRate4(8); // 5 to 8. offers protection against bursts of interference, A higher CR offers more protection, but increases time on air.
   // Set spreading factor to the highest (SF12)
-  rf95.setSpreadingFactor(12); // 6 to 12. A higher spreading factor increases the Signal to Noise Ratio (SNR), and thus sensitivity and range, but also increases the airtime of the packet. The number of chips per symbol is calculated as 2SF . For example, with an SF of 12 (SF12) 4096 chips/symbol are used. Each increase in SF halves the transmission rate and, hence, doubles transmission duration and ultimately energy consumption.
+  rf95.setSpreadingFactor(spreadingFactor);
   // Set bandwidth to the lowest (125 kHz). July 2023- 62500 Hz works with 1/2 dipole but unreliably. 41700 Hz does not work (tried 1/4 monopole, helical and 1/2 dipole for tx and 1/2 dipole for rx)
-  rf95.setSignalBandwidth(125000); // 7.8 to 500 kHz. typical values are 125000 ,250000 or 500000 Hz. Higher BW gives a higher data rate (thus shorter time on air), but a lower sensitivity.  Lower BW also requires more accurate crystals (less ppm).
+  rf95.setSignalBandwidth(signalBandwidth);
   // Set the desired frequency @TODO-how to set for optimal range?
   if (!rf95.setFrequency(frequency))
   {
@@ -140,7 +121,6 @@ void setup()
 
 void loop()
 {
-  static unsigned long loopCounter = 1;
   // delay(2000);//wait for message to come in @TODO-needed?
 
   if (rf95.available())
@@ -152,28 +132,41 @@ void loop()
 
     if (rf95.recv(buf, &len)) // recv wants two pointers. You don't need to use &buf because C++ returns the address to the first element &len returns memory address of len
     {
-      buf[len] = '\0'; // Null-terminate the received message to treat it as a string
-      Serial.print(F("Message,"));
-      Serial.println((char *)buf); // casts this as a chracter array?? @TODO-check
+      static unsigned long messageCounter = 1;
 
+      if (messageCounter == 1)
+      {
+        Serial.println(F("S1,rssi,snr,frequencyError,bytes received,SpreadingFactor,SignalBandwidth,Frequency,M1,[message contents]"));
+      }
+      // print the signal info first since this will always be the same
       int16_t rssi = rf95.lastRssi();
       int snr = rf95.lastSNR();
       int freqError = rf95.frequencyError();
 
-      //Serial.println(F("INFO-RSSI,SNR,Frequency error,message length (bytes)"));
-      Serial.print(F("Signal,"));
+      Serial.print(F("S1,"));
       Serial.print(rssi);
       Serial.print(',');
       Serial.print(snr);
       Serial.print(',');
       Serial.print(freqError);
       Serial.print(',');
-      Serial.println(len);
+      Serial.print(len);
+      Serial.print(',');
+      Serial.print(spreadingFactor);
+      Serial.print(',');
+      Serial.print(signalBandwidth);
+      Serial.print(',');
+      Serial.print(frequency);
+      Serial.print(',');
+
+      buf[len] = '\0'; // Null-terminate the received message to treat it as a string
+      Serial.print(F("M1,"));
+      Serial.println((char *)buf); // casts this as a chracter array?? @TODO-check
 
       // return ACK message, if needed
       //@TODO-add support for requesting an ack message or not
       static boolean ackReq = true;
-      const char *ackMessage = "ACK";// Acknowledgment message, careful changing this as firmware update of all nodes will be needed. All receive nodes set to not send ACKs to this specific message
+      const char *ackMessage = "ACK";                                                   // Acknowledgment message, careful changing this as firmware update of all nodes will be needed. All receive nodes set to not send ACKs to this specific message
       boolean messageIsACK = strncmp((char *)buf, ackMessage, strlen(ackMessage)) == 0; // compaire the first characters of buffer to see if this is ACK message
 
       if (ackReq && !messageIsACK) // if ack requested and this is not an ACK message itself
@@ -181,22 +174,29 @@ void loop()
         // Send an acknowledgment back to the sender
         rf95.send((uint8_t *)ackMessage, strlen(ackMessage));
         rf95.waitPacketSent();
-        Serial.println("INFO-Sent ACK message.");
+        if (debug)
+        {
+          Serial.println("INFO-Sent ACK message.");
+        }
       }
       else
       {
-        Serial.println("INFO-not sending ACK message.");
+        if (debug)
+        {
+          Serial.println("INFO-not sending ACK message.");
+        }
       }
-    }
 
-    digitalWrite(LEDPIN, LOW);
+      messageCounter++;
+      digitalWrite(LEDPIN, LOW);
+    }
   }
 
   static unsigned long previousMillis = 0;
   // Get the current time
   unsigned long currentMillis = millis();
   // if(debug && loopCounter % 1000000 == 0){
-  if (debug && (currentMillis - previousMillis >= 60000))
+  if (debug && (currentMillis - previousMillis >= 120000))
   { // print a test message to serial, even if no transmission, 300000=5 min
     digitalWrite(LEDPIN, HIGH);
     // Reset the timer
@@ -206,5 +206,4 @@ void loop()
     digitalWrite(LEDPIN, LOW);
   }
 
-  loopCounter++;
 } // end loop fcn
