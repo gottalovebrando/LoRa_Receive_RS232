@@ -44,15 +44,18 @@ void fcn()
 
 void setup()
 {
-  firmwareV = 1.3;
+  firmwareV = 1.4;
   /*
    * Version history:
    * V1.0-initial
    * V1.1-added ability to not send ACKs to other ACKs and print signal infromation
    * V1.2-changed the way messages are sent to serial slightly
    * V1.3-changed message format
+   * V1.4-added custom delimiter varaiable
    *
    * @TODO:
+   * Only send ACK if ACK received from host computer
+   * If not receiving ACKs from host computer, reboot it using a pin
    * change from a boolean debug variable to a log level byte variable
    * allow log level set from serial
    * allow frequency set from serial
@@ -60,7 +63,7 @@ void setup()
    * store nodeID in EEPROM
    * make it send firmware and nodeID in response to serial data
    */
-  Serial.begin(4800);
+  Serial.begin(9600);
   Serial.println();
   Serial.println();
   Serial.println(F("SETUP-Compiled with VScode and PlatformIO")); //@TODO-update this whenever compiling or get platformIO to do it automatically
@@ -121,9 +124,8 @@ void setup()
 
 void loop()
 {
-  // delay(2000);//wait for message to come in @TODO-needed?
 
-  if (rf95.available())
+  if (rf95.available()) // note- do not need to delay because .available() returns true only if there is a new, complete, error free message
   {
     digitalWrite(LEDPIN, HIGH);
 
@@ -134,41 +136,100 @@ void loop()
     {
       static unsigned long messageCounter = 1;
 
-      if (messageCounter == 1)
+      const char delim = '\'';
+      if (messageCounter == 1) // print header if this is the first message
       {
-        Serial.println(F("S1,rssi,snr,frequencyError,bytes received,SpreadingFactor,SignalBandwidth,Frequency,M1,[message contents]"));
+        //@TODO-get this to update with the delim
+        // Serial.println(F("'S1'rssi'snr'frequencyError'bytes received'SpreadingFactor'SignalBandwidth'Frequency'M1'[message contents]'"));
+        Serial.print(delim);
+        Serial.print(F("N1"));
+        Serial.print(delim);
+        Serial.print(F("message counter (local to this device)"));
+        Serial.print(delim);
+        // extra space for another field later
+        Serial.print(delim);
+        // extra space for another field later
+        Serial.print(delim);
+        Serial.print(F("S1"));
+        Serial.print(delim);
+        Serial.print(F("rssi"));
+        Serial.print(delim);
+        Serial.print(F("snr"));
+        Serial.print(delim);
+        Serial.print(F("frequencyError"));
+        Serial.print(delim);
+        Serial.print(F("bytes received"));
+        Serial.print(delim);
+        Serial.print(F("SpreadingFactor"));
+        Serial.print(delim);
+        Serial.print(F("SignalBandwidth"));
+        Serial.print(delim);
+        Serial.print(F("Frequency"));
+        Serial.print(delim);
+        // extra space for another field later
+        Serial.print(delim);
+        // extra space for another field later
+        Serial.print(delim);
+        // extra space for another field later
+        Serial.print(delim);
+        // extra space for another field later
+        Serial.print(delim);
+        Serial.print(F("M1"));
+        Serial.print(delim);
+        Serial.print(F("[message contents]"));
+        Serial.println(delim);
       }
       // print the signal info first since this will always be the same
       int16_t rssi = rf95.lastRssi();
       int snr = rf95.lastSNR();
       int freqError = rf95.frequencyError();
-
-      Serial.print(F("S1,"));
+      Serial.print(delim);
+      Serial.print(F("N1"));
+      Serial.print(delim);
+      Serial.print(messageCounter);
+      Serial.print(delim);
+      // extra space for another field later
+      Serial.print(delim);
+      // extra space for another field later
+      Serial.print(delim);
+      Serial.print(F("S1"));
+      Serial.print(delim);
       Serial.print(rssi);
-      Serial.print(',');
+      Serial.print(delim);
       Serial.print(snr);
-      Serial.print(',');
+      Serial.print(delim);
       Serial.print(freqError);
-      Serial.print(',');
+      Serial.print(delim);
       Serial.print(len);
-      Serial.print(',');
+      Serial.print(delim);
       Serial.print(spreadingFactor);
-      Serial.print(',');
+      Serial.print(delim);
       Serial.print(signalBandwidth);
-      Serial.print(',');
+      Serial.print(delim);
       Serial.print(frequency);
-      Serial.print(',');
-
+      Serial.print(delim);
+      // extra space for another field later
+      Serial.print(delim);
+      // extra space for another field later
+      Serial.print(delim);
+      // extra space for another field later
+      Serial.print(delim);
+      // extra space for another field later
+      Serial.print(delim);
       buf[len] = '\0'; // Null-terminate the received message to treat it as a string
-      Serial.print(F("M1,"));
-      Serial.println((char *)buf); // casts this as a chracter array?? @TODO-check
+      Serial.print(F("M1"));
+      Serial.print(delim);
+      Serial.print((char *)buf); // casts this as a chracter array?? @TODO-check
+      Serial.println(delim);
 
       // return ACK message, if needed
       //@TODO-add support for requesting an ack message or not
+      //@TODO-add support to not print ACKs to serial
       static boolean ackReq = true;
       const char *ackMessage = "ACK";                                                   // Acknowledgment message, careful changing this as firmware update of all nodes will be needed. All receive nodes set to not send ACKs to this specific message
       boolean messageIsACK = strncmp((char *)buf, ackMessage, strlen(ackMessage)) == 0; // compaire the first characters of buffer to see if this is ACK message
 
+      delay(100);                  //@TODO-add method to increase this if we keep getting the same message
       if (ackReq && !messageIsACK) // if ack requested and this is not an ACK message itself
       {
         // Send an acknowledgment back to the sender
@@ -195,8 +256,7 @@ void loop()
   static unsigned long previousMillis = 0;
   // Get the current time
   unsigned long currentMillis = millis();
-  // if(debug && loopCounter % 1000000 == 0){
-  if (debug && (currentMillis - previousMillis >= 120000))
+  if (debug && (currentMillis - previousMillis >= 300000))
   { // print a test message to serial, even if no transmission, 300000=5 min
     digitalWrite(LEDPIN, HIGH);
     // Reset the timer
