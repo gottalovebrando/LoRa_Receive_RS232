@@ -107,6 +107,10 @@ void setup()
       ;
   }
 
+  //@TODO-consider:
+  //rf95.setPromiscuous(true);
+//rf95.setThisAddress(uint8_t thisAddress);
+
   Serial.println(F("INFO-RFM95 initialized."));
   if (debug)
   {
@@ -183,6 +187,14 @@ void loop()
       int16_t rssi = rf95.lastRssi();
       int snr = rf95.lastSNR();
       int freqError = rf95.frequencyError();
+
+      //@TODO-consider adding these:
+      //rf95.headerFlags();
+      //rf95.headerFrom();
+      //rf95.headerId();
+      //rf95.headerTo();
+      //rf95.rxBad();//may not be accurate
+      //rf95.rxGood();
       Serial.print(delim);
       Serial.print(F("N1"));
       Serial.print(delim);
