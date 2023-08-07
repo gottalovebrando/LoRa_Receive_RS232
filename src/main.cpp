@@ -27,7 +27,7 @@ boolean debug = false; // enable verbose debug messages to serial
 #define RFM95_CS 10 // chip select for SPI
 #define RFM95_INT 2 // interupt pin
 RH_RF95 rf95(RFM95_CS, RFM95_INT);
-unsigned long nodeID = 100001; // up to 2 million for lorawan?
+unsigned long nodeID = 100002; // up to 2 million for lorawan?
 //@TODO-move other parameters up here for easy setting
 float frequency = 904.0; // Specify the desired frequency in MHz
 //@TODO-is this the right data type??
@@ -237,7 +237,7 @@ void loop()
       // return ACK message, if needed
       //@TODO-add support for requesting an ack message or not
       //@TODO-add support to not print ACKs to serial
-      static boolean ackReq = true;
+      static boolean ackReq = false;
       const char *ackMessage = "ACK";                                                   // Acknowledgment message, careful changing this as firmware update of all nodes will be needed. All receive nodes set to not send ACKs to this specific message
       boolean messageIsACK = strncmp((char *)buf, ackMessage, strlen(ackMessage)) == 0; // compaire the first characters of buffer to see if this is ACK message
 
