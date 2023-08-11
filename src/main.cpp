@@ -4,7 +4,7 @@
  *
  * Circuit details below:
  *
- *
+ * 
  */
 
 //*****library inclusions below
@@ -27,9 +27,9 @@ boolean debug = false; // enable verbose debug messages to serial
 #define RFM95_CS 10 // chip select for SPI
 #define RFM95_INT 2 // interupt pin
 RH_RF95 rf95(RFM95_CS, RFM95_INT);
-unsigned long nodeID = 100002; // up to 2 million for lorawan?
+unsigned long nodeID = 100001; // up to 2 million for lorawan?
 //@TODO-move other parameters up here for easy setting
-float frequency = 904.0; // Specify the desired frequency in MHz
+float frequency = 920.0; // Specify the desired frequency in MHz
 //@TODO-is this the right data type??
 uint8_t spreadingFactor = 12;  // 6 to 12. A higher spreading factor increases the Signal to Noise Ratio (SNR), and thus sensitivity and range, but also increases the airtime of the packet. The number of chips per symbol is calculated as 2SF . For example, with an SF of 12 (SF12) 4096 chips/symbol are used. Each increase in SF halves the transmission rate and, hence, doubles transmission duration and ultimately energy consumption.
 long signalBandwidth = 125000; // 7.8 to 500 kHz. typical values are 125000 ,250000 or 500000 Hz. Higher BW gives a higher data rate (thus shorter time on air), but a lower sensitivity.  Lower BW also requires more accurate crystals (less ppm).  Set bandwidth to the lowest (125 kHz). July 2023- 62500 Hz works with 1/2 dipole but unreliably. 41700 Hz does not work (tried 1/4 monopole, helical and 1/2 dipole for tx and 1/2 dipole for rx)
@@ -237,7 +237,7 @@ void loop()
       // return ACK message, if needed
       //@TODO-add support for requesting an ack message or not
       //@TODO-add support to not print ACKs to serial
-      static boolean ackReq = false;
+      static boolean ackReq = true;
       const char *ackMessage = "ACK";                                                   // Acknowledgment message, careful changing this as firmware update of all nodes will be needed. All receive nodes set to not send ACKs to this specific message
       boolean messageIsACK = strncmp((char *)buf, ackMessage, strlen(ackMessage)) == 0; // compaire the first characters of buffer to see if this is ACK message
 
